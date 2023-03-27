@@ -43,7 +43,7 @@ def evaluate_renko(brick, history, column_name):
     return renko_obj.evaluate()[column_name]
 
 
-class RenkoMTF(IStrategy):
+class AdaptiveRenkoStrategy(IStrategy):
     
     # By: Mr Robot (@heymrrobot)
     # Renko Tower is a completely New Strategy to find strongly rising coins.
