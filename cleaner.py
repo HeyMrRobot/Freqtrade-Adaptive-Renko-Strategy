@@ -27,7 +27,6 @@ def evaluate_renko(brick, history, column_name):
     renko_obj.build_history(prices = history)
     return renko_obj.evaluate()[column_name]
 
-
 class AdaptiveRenkoStrategy(IStrategy):
     
     # By: Mr Robot (@heymrrobot)
@@ -44,7 +43,7 @@ class AdaptiveRenkoStrategy(IStrategy):
     # Can this strategy go short?
     can_short: bool = True
     use_custom_stoploss = True
-    startup_candle_count: int = 40
+    startup_candle_count: int = 20*2
 
     # These values can be overridden in the config.ino
     use_exit_signal = True
@@ -52,7 +51,7 @@ class AdaptiveRenkoStrategy(IStrategy):
     ignore_roi_if_entry_signal = False
     
     # Run "populate_indicators()" only for new candle.
-    process_only_new_candles = True
+    # process_only_new_candles = True
     
     def informative_pairs(self):
         # get access to all pairs available in whitelist.
@@ -61,13 +60,8 @@ class AdaptiveRenkoStrategy(IStrategy):
         informative_pairs = [(pair, '15m') for pair in pairs]
         return informative_pairs
         
- 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        
-        if not self.dp:
-            # Don't do anything if DataProvider is not available.
-            return dataframe
-
+        logger.info('1 Entering populate_indicators ...')
         inf_tf = '15m'
         # Get the informative pair
         informative = self.dp.get_pair_dataframe(pair=metadata['pair'], timeframe=inf_tf)
@@ -88,64 +82,78 @@ class AdaptiveRenkoStrategy(IStrategy):
         # Full documentation of this method, see below
         dataframe = merge_informative_pair(dataframe, informative, self.timeframe, inf_tf, ffill=True)
         
+        logger.info('2 merge_informative_pair done ...')
+        # Initialize renko_obj_obs
+        # if 'renko_obj_obs' not in locals():
+        #     renko_obj_obs = pyrenko.renko()
+        #     logger.info('3 renko_obj_obs created because not in locals()')
+        #     return renko_obj_obs
+        
         renko_obj_obs = pyrenko.renko()
-
         # When model is empty
         if len(renko_obj_obs.get_renko_prices()) == 0:
-            renko_obj_obs = pyrenko.renko()
-
+            # renko_obj_obs = pyrenko.renko()
+            logger.info('3 renko_obj_obs.get_renko_prices() == 0:  ...')
+            # history = dataframe.history(metadata['pair'],
+            #                             'price',
+            #                             bar_count = startup_candle_count, 
+            #                             )
+            
             # Get optimal brick size as maximum of score function by Brent's (or similar) method
             # First and Last ATR values are used as the boundaries
             opt_bs = opt.fminbound(lambda x: -evaluate_renko(brick = x, history = dataframe.close, column_name = 'score'), 
                                     np.min(dataframe['atr_15m']), np.max(dataframe['atr_15m']), disp=0)
-
+            logger.info('4 opt_bs done ...')
             # Build the model
-            print('REBUILDING RENKO >>>>>>>>>>>>>>  Pair name : ', metadata['pair'], 'Optimal brick size : ', opt_bs)
+            logger.info(f'REBUILDING RENKO >>>>>>>>>>>>>>  Pair name : {metadata["pair"]}, Optimal brick size : {opt_bs}')
             last_brick_size = opt_bs            
             renko_obj_obs.set_brick_size(auto=False, brick_size=opt_bs)
             renko_obj_obs.build_history(prices = dataframe.close)
-            
+            last_brick_direction = pd.Series(renko_obj_obs.get_renko_directions()[-1])
+            dataframe['last_brick_direction'] = last_brick_direction
+            renko_prices = pd.Series(renko_obj_obs.get_renko_prices())
+            dataframe['renko_price'] = renko_prices
             # Store some information
             # evo_results = renko_obj_obs.evaluate()
             score_value = renko_obj_obs.evaluate()['score']
-            last_brick_size = opt_bs    
             # dataframe['directions'] = renko_obj_obs.get_renko_directions()
-            dataframe.loc[:, ['last_brick_size', 'score_value', 'rebuilding_status', 'brick_size', 'price', 'renko_price', 'num_created_bars']] = (
-                last_brick_size,
+            
+            # Store some information
+            dataframe.loc[:, ['score_value', 'rebuilding_status', 'brick_size', 'price', 'num_created_bars']] = (
                 score_value,
                 1,
                 last_brick_size,
                 dataframe.close.iloc[-1],
-                renko_obj_obs.get_renko_prices()[-1],
                 0
             )
-            
+            logger.info('5 End of if ...')
+            return dataframe
         else:
-            print('Entering else block...')
-            last_price = dataframe(close,
-                                   bar_count =1
-                                    )
+            logger.info('Entering else block...')
+            # last_price = dataframe.history(metadata['pair'],
+            #                                 price,
+            #                                 bar_count = 1
+            #                                 )
                                 
             
             # Just for output and debug
-            prev = renko_obj_obs.get_renko_prices()[-1]
-            prev_dir = renko_obj_obs.get_renko_directions()[-1]
-            num_created_bars = renko_obj_obs.do_next(last_price)
+            # prev = renko_obj_obs.get_renko_prices()[-1]
+            # prev_dir = renko_obj_obs.get_renko_directions()[-1]
+            # dataframe['last_brick_direction'] = prev_dir
+            num_created_bars = renko_obj_obs.do_next(dataframe.close.iloc[-1])
             if num_created_bars != 0:
-                print('New Renko bars created')
-                print('last price: ' + str(last_price))
-                print('previous Renko price: ' + str(prev))
-                print('current Renko price: ' + str(crenko_obj_obs.get_renko_prices()[-1]))
-                print('direction: ' + str(prev_dir))
-                print('brick size: ' + str(renko_obj_obs.brick_size))
+                logger.info('New Renko bars created')
+                logger.info('last price: ' + str(dataframe.close.iloc[-1]))
+                logger.info('previous Renko price: ' + str(dataframe.renko_price))
+                logger.info('current Renko price: ' + str(renko_obj_obs.get_renko_prices()[-1]))
+                logger.info('direction: ' + str(dataframe.last_brick_direction))
+                logger.info('brick size: ' + str(renko_obj_obs.brick_size))
             
-            dataframe.loc[:, ['rebuilding_status', 'brick_size', 'price', 'renko_price', 'num_created_bars', 'last_brick_direction']] = (
+            dataframe.loc[:, ['rebuilding_status', 'renko_price', 'num_created_bars', 'last_brick_direction']] = (
                 0,
-                last_brick_size,
-                last_price,
-                renko_obj_obs.get_renko_prices()[-1],
+                renko_prices[-1],
                 num_created_bars,
-                prev_dir
+                last_brick_direction
             )
             # record(
             #     rebuilding_status = 0,
@@ -155,7 +163,10 @@ class AdaptiveRenkoStrategy(IStrategy):
             #     num_created_bars = num_created_bars,
             #     last_brick_direction = prev_dir
             # )
-        print(dataframe.columns)
+            # return dataframe
+           
+        logger.info(dataframe.last_brick_direction)
+        logger.info(score_value)
 
         return dataframe
             
