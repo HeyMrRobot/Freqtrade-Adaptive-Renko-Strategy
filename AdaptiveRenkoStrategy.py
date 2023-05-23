@@ -17,7 +17,7 @@ import pandas_ta as pta
 from technical import qtpylib
 import scipy.optimize as opt
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 def evaluate_renko(brick, history, column_name):
     renko_obj = pyrenko.renko()
@@ -28,12 +28,14 @@ def evaluate_renko(brick, history, column_name):
 class AdaptiveRenkoStrategy(IStrategy):
     
     """
-    This strategy is based on research work by Sergey Malchevskiy and uses Renko bricks to identify strongly rising coins.
-    The brick size is optimized using ATR from an informative period. For more information on the brick size optimization,
-    see the following article: https://towardsdatascience.com/renko-brick-size-optimization-34d64400f60e
+    This strategy is based on research work by Sergey Malchevskiy and uses Renko bricks to identify trends.
+    The brick size is optimized using ATR to find out boundaries from an informative period.
+    For more information on the brick size optimization, see the following article: 
+    https://towardsdatascience.com/renko-brick-size-optimization-34d64400f60e
 
-    This strategy is designed to work with FreqTrade and can be used in conjunction with FreqAI. For more information on using
-    Bayesian optimization on the model, see the following article: https://towardsdatascience.com/bayesian-optimization-in-trading-77202ffed530
+    This strategy is designed to work with FreqTrade and can be used in conjunction with FreqAI. 
+    For more information on using Bayesian optimization on this strategy as a training model, see the following article: 
+    https://towardsdatascience.com/bayesian-optimization-in-trading-77202ffed530
 
     Author: Mr Robot (@heymrrobot)
     """    
